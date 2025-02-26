@@ -1,0 +1,8 @@
+bt_topic_trigger: #do not change or remove the parameter namespace
+  plugins: ["trajectory_loader_plugin", "move_to_plugin", "move_to_conf_plugin",
+   "trigger_service_plugin", "set_bool_service_plugin", "wait_plugin"
+    "gpio_sequence_write_service_plugin"] #list of plugins you will need in your tree
+  trees_paths: ["path/to/package/tree/folder"] # paths to the trees folders you will use
+  priority_trees: ["stop_tree"] # name of the tree with highest priority, order of trees is important, first tree has highest priority
+  bt_topic: "/bt_topic" # name of the tree file
+
