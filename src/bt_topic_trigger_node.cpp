@@ -86,6 +86,7 @@ private:
 
   void btCallback(const std_msgs::msg::String::SharedPtr msg)
   {
+    RCLCPP_INFO(node_->get_logger(), "\033[1m\033[37m Received trigger \"%s\" %d \033[0m",msg->data.c_str());
     setTrigger(msg->data);
   }
 
@@ -103,7 +104,7 @@ private:
         if(trigger.compare(priority_tree) == 0)
           {
             priority_level = i;
-            RCLCPP_INFO(node_->get_logger(), "Triggering the priority tree %s with priority %d",
+            RCLCPP_INFO(node_->get_logger(), "\033[1m\033[38;5;214m Triggering the priority tree \"%s\" with priority %d \033[0m",
                         trigger.c_str(), priority_level);
             return priority_level;
           }
@@ -133,26 +134,37 @@ private:
 
         std::string bt_name = trigger + "_tree.xml";
 
-        for (const auto& dir : trees_paths_)
+        for (const std::string& dir : trees_paths_)
           {
+            RCLCPP_INFO(node_->get_logger(), "\033[1m\033[37m Looking inside dir \"%s\" \033[0m",dir.c_str());
+
             std::filesystem::path bt_file_path = std::filesystem::path(dir) / bt_name;
             if (std::filesystem::exists(bt_file_path))
               {
                 path_to_bt = bt_file_path;
-                RCLCPP_INFO(node_->get_logger(), "Behavior Tree file %s found!", bt_name.c_str());
+                RCLCPP_INFO(node_->get_logger(), "\033[1m\033[37m Behavior Tree file \"%s\" found! \033[0m", bt_name.c_str());
 
                 return true;
               }
           }
 
-        RCLCPP_ERROR(node_->get_logger(), "Behavior Tree file %s not found!", bt_name.c_str());
+        RCLCPP_ERROR(node_->get_logger(), "\033[1m\033[37m Behavior Tree file \"%s\" not found! \033[0m", bt_name.c_str());
         return false;
       }
   }
 
   bool betterPriority(const int& trigger_priority, const int& priority)
   {
-    return (trigger_priority<priority);
+    if(trigger_priority<priority)
+      {
+        RCLCPP_INFO(node_->get_logger(),"\033[1m\033[38;5;214m Trigger with better priority received, ACCEPTED! \033[0m");
+        return true;
+      }
+    else
+      {
+        RCLCPP_INFO(node_->get_logger(),"\033[1m\033[38;5;130m Trigger with worse priority received, DISCARDED! \033[0m");
+        return false;
+      }
   }
 
 public:
@@ -169,14 +181,15 @@ public:
           bt_topic_, 1, std::bind(&BTTopicTriggerNode::btCallback, this, std::placeholders::_1));
   }
 
-  bool runBTs()
+  void runBTs()
   {
     BT::Tree tree;
     bool kill = false;
+    int trigger_priority;
     bool tree_loaded = false;
     bool tree_running = false;
-    int priority, trigger_priority;
     std::filesystem::path path_to_bt;
+    int priority = std::numeric_limits<int>::max();
 
     rclcpp::executors::MultiThreadedExecutor executor;
     executor.add_node(node_);
@@ -200,12 +213,19 @@ public:
                 tree_loaded = true;
                 priority = trigger_priority;
 
-                RCLCPP_INFO(node_->get_logger(), "Behavior Tree loaded!");
+                RCLCPP_INFO(node_->get_logger(), "\033[1m\033[37m Behavior Tree loaded! \033[0m");
               }
           }
 
         if(tree_loaded)
-          tree_running = tree.rootNode()->executeTick() == BT::NodeStatus::RUNNING;
+          {
+            tree_running = tree.rootNode()->executeTick() == BT::NodeStatus::RUNNING;
+            if(!tree_running)
+              {
+                tree.haltTree();
+                tree_loaded = false;
+              }
+          }
 
         executor.spin_some();
       }
@@ -229,6 +249,7 @@ int main(int argc, char ** argv)
     plugins_found = plugins_found+"\n -"+plugin_path;
   RCLCPP_INFO_STREAM(logger,plugins_found);
 
+  std::string w;
   std::string ns= "/bt_topic_trigger";
 
   std::vector<std::string> plugins_to_load;
@@ -291,7 +312,7 @@ int main(int argc, char ** argv)
   std::string bt_topic;
   if(cnr::param::has(ns+"/bt_topic",w))
     {
-      if(!cnr::param::get(ns+"/bt_topic",priority_trees,w))
+      if(!cnr::param::get(ns+"/bt_topic",bt_topic,w))
         {
           RCLCPP_ERROR_STREAM(logger,"cannot load "<<ns+"/bt_topic");
           RCLCPP_ERROR_STREAM(logger,"what:\n"<<w);
@@ -311,6 +332,8 @@ int main(int argc, char ** argv)
 
   for(const std::string& plugin_name:plugins_to_load)
     {
+      RCLCPP_INFO_STREAM(logger,"Loading plugin "<<plugin_name);
+
       std::string path_to_plugin;
       for(const std::string& this_plugin:available_plugins)
         {
